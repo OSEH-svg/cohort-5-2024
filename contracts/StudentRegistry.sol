@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-contract StudentRegistry {
-    //custom data type
+contract StudentRegs {
     struct Student {
         address studentAddr;
         string name;
@@ -13,32 +12,35 @@ contract StudentRegistry {
     address public owner;
 
     constructor() {
-        owner = msg.sender;
+        owner = msg.sender;  // address of the contract deployer
     }
 
-    //dynamic array of students
+    // dynamic array of students
     Student[] private students;
+    mapping(address => Student) public studentMapping;
 
-    mapping(address => Student) public studentsMapping;
-
-    modifier onlyOwner () {
-        require( owner == msg.sender, "You fraud!!!");
+    modifier onlyOwner() {
+        require(owner == msg.sender, "You're not authorized");
         _;
     }
 
-    modifier isNotAddressZero () {
-        require(msg.sender != address(0), "Invalid Address");
+    modifier isNotAddressZero() {
+        require(msg.sender != address(0), "Invalid address");
         _;
     }
+
+    event StudentAdded(address indexed studentAddr, uint256 studentId);
+    event StudentUpdated(address indexed studentAddr, uint256 studentId);
+    event StudentDeleted(address indexed studentAddr, uint256 studentId);
 
     function addStudent(
         address _studentAddr,
         string memory _name,
         uint8 _age
     ) public onlyOwner isNotAddressZero {
-
-        require( bytes(_name).length > 0, "Name cannot be blank");
-        require( _age >= 18, "This student is under age");
+        require(_studentAddr != address(0), "Invalid address");
+        require(bytes(_name).length > 0, "Name cannot be blank");
+        require(_age >= 18, "Student age must be at least 18");
 
         uint256 _studentId = students.length + 1;
         Student memory student = Student({
@@ -49,41 +51,63 @@ contract StudentRegistry {
         });
 
         students.push(student);
-        // add student to studentsMapping
-        studentsMapping[_studentAddr] = student;
+        studentMapping[_studentAddr] = student;
+
+        emit StudentAdded(_studentAddr, _studentId);
     }
 
-    function getStudent(uint8 _studentId) public isNotAddressZero view returns (Student memory) {
+    function getStudent(uint256 _studentId) public view returns (Student memory) {
+        require(_studentId > 0 && _studentId <= students.length, "Invalid student ID");
         return students[_studentId - 1];
     }
 
-
-
-    function getStudentFromMapping(address _studentAddr)
-        public
-        isNotAddressZero
-        view
-        returns (Student memory)
-    {
-        return studentsMapping[_studentAddr];
+    function getStudentFromMapping(address _studentAddr) public view returns (Student memory) {
+        require(studentMapping[_studentAddr].studentId != 0, "Student not found");
+        return studentMapping[_studentAddr];
     }
 
+    function deleteStudentFromMapping(address _studentAddr) public onlyOwner {
+        require(studentMapping[_studentAddr].studentId != 0, "Student not found");
+        uint256 studentId = studentMapping[_studentAddr].studentId;
+        delete studentMapping[_studentAddr];
 
+        emit StudentDeleted(_studentAddr, studentId);
+    }
 
-    function deleteStudent(address _studentAddr) public onlyOwner  isNotAddressZero{
+    function updateStudent(
+        uint256 _studentId,
+        address _studentAddr,
+        string memory _name,
+        uint8 _age
+    ) public onlyOwner {
+        require(_studentId > 0 && _studentId <= students.length, "Invalid student ID");
+        require(_age >= 18, "Student age must be at least 18");
 
-        require(studentsMapping[_studentAddr].studentAddr != address(0), "Student does not exist");
+        uint256 index = _studentId - 1;
 
-        // delete studentsMapping[_studentAddr];
+        Student storage student = students[index];
+        student.studentAddr = _studentAddr;
+        student.name = _name;
+        student.age = _age;
 
-        Student memory student = Student({
-            studentAddr: address(0),
-            name: "",
-            age: 0,
-            studentId: 0
-        });
+        studentMapping[_studentAddr] = student;
 
-        studentsMapping[_studentAddr] = student;
+        emit StudentUpdated(_studentAddr, _studentId);
+    }
 
+    function deleteStudent(uint256 _studentId) public onlyOwner {
+        require(_studentId > 0 && _studentId <= students.length, "Invalid student ID");
+
+        uint256 studentId = students[_studentId - 1].studentId;
+        address studentAddr = students[_studentId - 1].studentAddr;
+
+        // Move the last element into the place to delete
+        students[_studentId - 1] = students[students.length - 1];
+        // Remove the last element
+        students.pop();
+
+        delete studentMapping[studentAddr];
+        emit StudentDeleted(studentAddr, studentId);
     }
 }
+
